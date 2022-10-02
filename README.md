@@ -1,68 +1,261 @@
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Explain what the simple List component does
 
-## Available Scripts
+The `WrappedListComponent` component is memoized with React's `memo` performance optimization API and named `List` in the codebase. The component accepts a prop `items` which should be a type of array of objects in the shape: `Array<{text: string}>`. The `WrappedListComponent` renders a list of `SingleListItem` mapping over `items` prop, and the component also keeps a track of which `SingleListItem` has been selected in `selectedIndex` state. The List component basically renders a list, and changes the background color of list item from green to red when clicked on.
 
-In the project directory, you can run:
+## What problems / warnings are there with code?
 
-### `yarn start`
+- **Bug-1**: onClickHandler function is immediately invoked in `onClick` in `li` tag in `WrappedSingleListItem` component.
 
-Runs the app in the development mode.<br />
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+  Before:
 
-The page will reload if you make edits.<br />
-You will also see any lint errors in the console.
+  ```jsx
+  <li onClick={onClickHandler(index)}>...</li>
+  ```
 
-### `yarn test`
+  After:
 
-Launches the test runner in the interactive watch mode.<br />
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+  ```jsx
+  <li onClick={() => onClickHandler(index)}>...</li>
+  ```
 
-### `yarn build`
+- **Bug-2**: Array has been destructured in wrong order in `WrappedListComponent` component.
 
-Builds the app for production to the `build` folder.<br />
-It correctly bundles React in production mode and optimizes the build for the best performance.
+  Before:
 
-The build is minified and the filenames include the hashes.<br />
-Your app is ready to be deployed!
+  ```jsx
+  const [setSelectedIndex, selectedIndex] = useState();
+  ```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+  After:
 
-### `yarn eject`
+  ```jsx
+  const [selectedIndex, setSelectedIndex] = useState(null);
+  ```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+- **Improvement-1**: There's no need to use useEffect here, since items dependency is not changing throughout its lifecycle. And even though if items prop changes, the component will re-render anyway.
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+  Before:
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+  ```jsx
+  useEffect(() => {
+    setSelectedIndex(null);
+  }, [items]);
+  ```
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+  After:
 
-## Learn More
+  ```jsx
+  // useEffect(() => {
+  //   setSelectedIndex(null);
+  // }, [items]);
+  ```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+- **Improvement-2**: key prop has been added so that react can keep track of the list component and handle its internal performance optimization.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+  Before:
 
-### Code Splitting
+  ```jsx
+  <SingleListItem>...</SingleListItem>
+  ```
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/code-splitting
+  AFter:
 
-### Analyzing the Bundle Size
+  ```jsx
+  <SingleListItem key={index}>...</SingleListItem>
+  ```
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size
+- **Bug-3**: Previously only index was provided which doesn't make sense, since we are tracking the index of the listItem which is selected in selectedIndex state. So we should compare the index of the listItem and selectedIndex state, which would return boolean value.
 
-### Making a Progressive Web App
+  Before:
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app
+  ```jsx
+    <SingleListItem isSelected={selectedIndex}>...<SingleListItem/>
+  ```
 
-### Advanced Configuration
+  After:
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/advanced-configuration
+  ```jsx
+  <SingleListItem isSelected={selectedIndex === index}>...<SingleListItem/>
+  ```
 
-### Deployment
+- **Bug-4**:
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/deployment
+  Before:
 
-### `yarn build` fails to minify
+  ```jsx
+  WrappedListComponent.propTypes = {
+    items: PropTypes.array(
+      PropTypes.shapeOf({
+        text: PropTypes.string.isRequired,
+      })
+    ),
+  };
+  ```
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify
+  After:
+
+  ```jsx
+   WrappedListComponent.propTypes = {
+    items: PropTypes.arrayOf(
+      PropTypes.shape({
+        text: PropTypes.string.isRequired,
+      })
+    );
+  };
+  ```
+## Please fix, optimize, and/or modify the component as much as you think is necessary.
+The codebase has been modified and optimized. Code after fixing & optimizing:
+
+```jsx
+import React, { useState, /*useEffect,*/ memo } from 'react';
+
+/**
+ * There's no need to import useEffect, later explained why it has been removed
+ */
+
+import PropTypes from 'prop-types';
+
+// Single List Item
+const WrappedSingleListItem = ({
+  index,
+  isSelected,
+  onClickHandler,
+  text,
+}) => {
+  return (
+    <li
+      style={{ backgroundColor: isSelected ? 'green' : 'red' }}
+      /**
+       * Before:
+       * onClick={onClickHandler(index)}
+       * 
+       * After:
+       */
+      onClick={() => onClickHandler(index)}
+    /**
+     * It should be function, previously the function was immediately
+     * invoked. Now it won't be immediately invoked, rather will be
+     * invoked when onclick event ocurred
+     */
+    >
+      {text}
+    </li>
+  );
+};
+
+WrappedSingleListItem.propTypes = {
+  index: PropTypes.number,
+  isSelected: PropTypes.bool,
+  onClickHandler: PropTypes.func.isRequired,
+  text: PropTypes.string.isRequired,
+};
+
+const SingleListItem = memo(WrappedSingleListItem);
+
+// List Component
+const WrappedListComponent = ({
+  items,
+}) => {
+
+  /**
+   * Before:
+   *   const [setSelectedIndex, selectedIndex] = useState();
+   * After: 
+   */
+  const [selectedIndex, setSelectedIndex] = useState(null);
+
+  /**
+   * Before: 
+   */
+
+  // useEffect(() => {
+  //   setSelectedIndex(null);
+  // }, [items]);
+
+  /**
+   * There's no need to use useEffect here, since items dependency
+   * is not changing throughout its lifecycle. And even though if items
+   * prop changes, the component will re-render anyway 
+   */
+
+  const handleClick = index => {
+    setSelectedIndex(index);
+  };
+
+  return (
+    <ul style={{ textAlign: 'left' }}>
+      {items?.map((item, index) => (
+        <SingleListItem
+          /**
+           * Before: no key prop
+           * After: 
+           */
+
+          key={index}
+          /**
+           * key prop has been added so that react can keep track
+           * of the list component and handle its internal 
+           * performance optimization
+           */
+
+          onClickHandler={() => handleClick(index)}
+          text={item.text}
+          index={index}
+          /**
+           * Before:
+           *  isSelected={selectedIndex}
+           * 
+           * After:
+           */
+          isSelected={selectedIndex === index}
+          /**
+           * Previously only index was provided which doesn't 
+           * make sense, since we are tracking the index of the
+           * listItem which is selected in selectedIndex state.
+           * So we should compare the index of the listItem and 
+           * selectedIndex state, which would return boolean value.
+           */
+        />
+      ))}
+    </ul>
+  )
+};
+
+
+
+WrappedListComponent.propTypes = {
+  /**
+   * Before: 
+   *   items: PropTypes.array(PropTypes.shapeOf({
+   * 
+   * After:
+   */
+  items: PropTypes.arrayOf(PropTypes.shape({
+    text: PropTypes.string.isRequired,
+  }))
+}
+
+WrappedListComponent.defaultProps = {
+  items: null,
+};
+
+const List = memo(WrappedListComponent);
+
+// export default List;
+
+
+export default function App() {
+  return (
+    <div>
+      <List items={(() => {
+        const arr = []
+        for (let i = 0; i < 10; i++) {
+          arr.push({ text: `This is line ${i + 1}` })
+        }
+        return arr;
+      })()} />
+    </div>
+  )
+}
+
+```
